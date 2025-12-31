@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TM 經銷商問題收集系統</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
+</head>
+<body>
+  <div class="page">
+    <header>
+      <div class="brand">
+        <div class="brand-main">
+          <img src="tm-logo.png" alt="TM Robot logo" class="brand-logo">
+          <div>
+            <p class="eyebrow">客戶支援工具</p>
+            <h1>經銷商問題收集與分類面板</h1>
+          </div>
+        </div>
+        <p class="subtitle">輸入文字或圖片，系統協助歸檔並統計問題類型，掌握 TM 經銷商客訴痛點</p>
+      </div>
+      <div class="actions">
+        <button id="export-excel" class="ghost">匯出 Excel</button>
+        <button id="export-json" class="ghost">匯出 JSON</button>
+      </div>
+    </header>
+
+    <section class="card">
+      <h2>新增事件</h2>
+      <form id="issue-form">
+        <label class="field">
+          <span>經銷商或客戶名稱</span>
+          <input id="issue-customer" type="text" placeholder="例：ABC 公司、XYZ 經銷商…">
+        </label>
+
+        <label class="field">
+          <span>問題描述 (可貼上文字)</span>
+          <textarea id="issue-text" placeholder="例：TMflow 開啟後無法連上設備…"></textarea>
+        </label>
+
+        <label class="field">
+          <span>問題截圖或照片 (可多選，支援拖曳上傳)</span>
+          <div id="file-drop-zone" class="file-drop-zone">
+            <input id="issue-files" type="file" accept="image/*" multiple>
+            <div class="file-drop-hint">拖曳圖片到此處或點擊選擇檔案</div>
+            <div id="file-preview" class="file-preview"></div>
+          </div>
+        </label>
+
+        <div class="field grid">
+          <label>
+            <span>預設分類</span>
+            <select id="issue-category">
+              <option value="auto">自動判別</option>
+              <option value="TMflow應用問題">TMflow應用問題</option>
+              <option value="視覺功能問題">視覺功能問題</option>
+              <option value="通訊問題">通訊問題</option>
+              <option value="硬體/機構">硬體/機構</option>
+              <option value="設定/流程">設定/流程</option>
+              <option value="其他">其他</option>
+            </select>
+          </label>
+
+          <label>
+            <span>自訂分類 (可留空)</span>
+            <input id="custom-category" type="text" placeholder="例：教育訓練、帳號權限…">
+          </label>
+        </div>
+
+        <div class="form-actions">
+          <span id="status" class="status"></span>
+          <button type="submit">建立事件</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="grid two-col">
+      <div class="card">
+        <h2>分類統計</h2>
+        <canvas id="category-chart" height="240"></canvas>
+      </div>
+      <div class="card">
+        <h2>事件列表</h2>
+        <div id="category-filter" class="chip-row"></div>
+        <div id="issue-list" class="issue-list empty">尚未新增事件</div>
+      </div>
+    </section>
+  </div>
+
+  <div id="image-modal" class="image-modal hidden">
+    <div class="image-modal-backdrop"></div>
+    <div class="image-modal-content">
+      <button id="image-modal-close" class="image-modal-close" aria-label="關閉圖片">×</button>
+      <button id="image-modal-prev" class="image-modal-nav image-modal-prev" aria-label="上一張">‹</button>
+      <button id="image-modal-next" class="image-modal-nav image-modal-next" aria-label="下一張">›</button>
+      <img id="image-modal-img" alt="issue screenshot">
+      <div id="image-modal-counter" class="image-modal-counter"></div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
+
