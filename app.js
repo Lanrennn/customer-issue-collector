@@ -1,10 +1,13 @@
 (() => {
   const keywords = {
-    "TMflow應用問題": ["tmflow", "flow", "應用", "流程", "app", "專案"],
-    "視覺功能問題": ["vision", "視覺", "影像", "camera", "辨識", "barcode", "ocr"],
-    "通訊問題": ["連線", "通訊", "ip", "網路", "ethernet", "modbus", "tcp", "mqtt"],
-    "硬體/機構": ["硬體", "機構", "馬達", "夾爪", "sensor", "電源", "board"],
-    "設定/流程": ["設定", "config", "校正", "校準", "update", "韌體", "license"],
+    "視覺功能": ["vision", "視覺", "影像", "camera", "辨識", "barcode", "ocr", "視覺功能", "視覺系統", "相機", "拍照", "識別"],
+    "通訊相關": ["連線", "通訊", "ip", "網路", "ethernet", "modbus", "tcp", "mqtt", "通訊", "連接", "連線", "通訊協定", "通訊協議"],
+    "運動與力矩": ["運動", "力矩", "馬達", "motor", "torque", "速度", "加速度", "減速", "運動控制", "位置", "軌跡"],
+    "安全與法規": ["安全", "法規", "safety", "安全區", "安全設定", "權限", "法規", "合規", "安全標準"],
+    "邏輯編程與調試難度": ["編程", "程式", "programming", "調試", "debug", "邏輯", "流程", "tmflow", "flow", "應用", "專案", "程式設計", "除錯"],
+    "安裝、校正與維護": ["安裝", "校正", "校準", "calibration", "維護", "maintenance", "設定", "config", "韌體", "firmware"],
+    "周邊整合 (I/O & Gripper等)": ["i/o", "io", "gripper", "夾爪", "sensor", "感測器", "周邊", "整合", "外設", "周邊設備", "輸入輸出"],
+    "系統升級與備份": ["系統", "升級", "update", "備份", "backup", "還原", "restore", "系統更新", "版本", "version", "更新", "升級系統"],
     "其他": []
   };
 
@@ -28,7 +31,6 @@
   
   let currentImageIndex = 0;
   let currentImageList = [];
-  const exportBtn = document.getElementById("export-json");
   const exportExcelBtn = document.getElementById("export-excel");
 
   let chart;
@@ -36,8 +38,51 @@
   let activeFilter = "全部";
   let syncTimer = null;
   let customCategories = new Set(); // 儲存自訂分類
+  let isAdmin = false; // 管理員狀態
 
   const API_BASE = `${window.location.origin}/api`;
+  
+  // 管理員相關元素
+  const adminLoginBtn = document.getElementById("admin-login-btn");
+  const adminLoginModal = document.getElementById("admin-login-modal");
+  const adminLoginClose = document.getElementById("admin-login-close");
+  const adminLoginForm = document.getElementById("admin-login-form");
+  const adminPasswordInput = document.getElementById("admin-password");
+  const adminLoginStatus = document.getElementById("admin-login-status");
+  const adminLogoutSection = document.getElementById("admin-logout-section");
+  const adminLogoutBtn = document.getElementById("admin-logout-btn");
+  
+  // 管理員密碼（預設為 "aadmin"，可在實際部署時修改）
+  const ADMIN_PASSWORD = "aadmin";
+
+  // 清理舊分類（測試2 和 TMflow應用問題）
+  function cleanupOldCategories() {
+    const oldCategories = ["測試2", "TMflow應用問題"];
+    let hasChanges = false;
+    
+    // 將使用舊分類的事件轉移到「其他」
+    issues.forEach((issue) => {
+      if (oldCategories.includes(issue.category)) {
+        issue.category = "其他";
+        hasChanges = true;
+      }
+    });
+    
+    // 從自訂分類中移除舊分類
+    oldCategories.forEach((oldCat) => {
+      if (customCategories.has(oldCat)) {
+        customCategories.delete(oldCat);
+        hasChanges = true;
+      }
+    });
+    
+    // 如果有變更，保存數據
+    if (hasChanges) {
+      saveCustomCategories();
+      saveToLocalStorage();
+      scheduleSync();
+    }
+  }
 
   // 載入自訂分類
   function loadCustomCategories() {
@@ -58,6 +103,8 @@
         customCategories.add(issue.category);
       }
     });
+    // 清理舊分類
+    cleanupOldCategories();
     saveCustomCategories();
   }
 
@@ -107,6 +154,9 @@
   }
 
   function renderList() {
+    // 確保清理舊分類（在顯示前檢查）
+    cleanupOldCategories();
+    
     const filtered =
       activeFilter === "全部"
         ? issues
@@ -172,6 +222,10 @@
         badge.addEventListener("click", () => {
           const currentCat = issue.category;
           const allCats = getAllCategories();
+          // 過濾掉舊分類（測試2 和 TMflow應用問題）
+          const filteredCats = allCats.filter((cat) => 
+            cat !== "測試2" && cat !== "TMflow應用問題"
+          );
           
           // 建立選單
           const menu = document.createElement("div");
@@ -184,13 +238,36 @@
           menu.style.boxShadow = "0 4px 12px rgba(0,0,0,0.15)";
           menu.style.padding = "8px 0";
           menu.style.minWidth = "180px";
+          menu.style.maxHeight = "400px";
+          menu.style.overflowY = "auto";
+          menu.style.overflowX = "hidden";
           
           // 計算選單位置（相對於 badge）
           const rect = badge.getBoundingClientRect();
-          menu.style.top = `${rect.bottom + 4}px`;
-          menu.style.left = `${rect.left}px`;
+          const viewportHeight = window.innerHeight;
+          const viewportWidth = window.innerWidth;
+          const menuHeight = Math.min(400, filteredCats.length * 40 + 100); // 估算選單高度
+          const spaceBelow = viewportHeight - rect.bottom;
+          const spaceAbove = rect.top;
           
-          allCats.forEach((cat) => {
+          // 如果下方空間不足，嘗試在上方顯示
+          if (spaceBelow < menuHeight && spaceAbove > spaceBelow) {
+            menu.style.bottom = `${viewportHeight - rect.top + 4}px`;
+            menu.style.top = "auto";
+          } else {
+            menu.style.top = `${rect.bottom + 4}px`;
+            menu.style.bottom = "auto";
+          }
+          
+          // 確保選單不會超出右側邊界
+          const menuWidth = 180;
+          if (rect.left + menuWidth > viewportWidth) {
+            menu.style.left = `${Math.max(4, viewportWidth - menuWidth - 4)}px`;
+          } else {
+            menu.style.left = `${rect.left}px`;
+          }
+          
+          filteredCats.forEach((cat) => {
             const option = document.createElement("div");
             option.style.padding = "8px 16px";
             option.style.cursor = "pointer";
@@ -202,28 +279,30 @@
             label.textContent = cat;
             option.appendChild(label);
             
-            // 所有分類都可以刪除（顯示刪除按鈕）
-            const deleteBtn = document.createElement("span");
-            deleteBtn.innerHTML = "×";
-            deleteBtn.style.cursor = "pointer";
-            deleteBtn.style.fontSize = "18px";
-            deleteBtn.style.fontWeight = "bold";
-            deleteBtn.style.color = "#b91c1c";
-            deleteBtn.style.marginLeft = "8px";
-            deleteBtn.style.width = "20px";
-            deleteBtn.style.height = "20px";
-            deleteBtn.style.display = "flex";
-            deleteBtn.style.alignItems = "center";
-            deleteBtn.style.justifyContent = "center";
-            deleteBtn.title = "刪除此分類";
-            deleteBtn.addEventListener("click", (e) => {
-              e.stopPropagation();
-              if (document.body.contains(menu)) {
-                document.body.removeChild(menu);
-              }
-              deleteCategory(cat);
-            });
-            option.appendChild(deleteBtn);
+            // 僅管理員可以刪除分類
+            if (isAdmin) {
+              const deleteBtn = document.createElement("span");
+              deleteBtn.innerHTML = "×";
+              deleteBtn.style.cursor = "pointer";
+              deleteBtn.style.fontSize = "18px";
+              deleteBtn.style.fontWeight = "bold";
+              deleteBtn.style.color = "#b91c1c";
+              deleteBtn.style.marginLeft = "8px";
+              deleteBtn.style.width = "20px";
+              deleteBtn.style.height = "20px";
+              deleteBtn.style.display = "flex";
+              deleteBtn.style.alignItems = "center";
+              deleteBtn.style.justifyContent = "center";
+              deleteBtn.title = "刪除此分類";
+              deleteBtn.addEventListener("click", (e) => {
+                e.stopPropagation();
+                if (document.body.contains(menu)) {
+                  document.body.removeChild(menu);
+                }
+                deleteCategory(cat);
+              });
+              option.appendChild(deleteBtn);
+            }
             
             if (cat === currentCat) {
               option.style.background = "rgba(37, 99, 235, 0.1)";
@@ -241,7 +320,7 @@
             });
             option.addEventListener("click", (e) => {
               // 如果點擊的是刪除按鈕，不執行選擇
-              if (deleteBtn && (e.target === deleteBtn || deleteBtn.contains(e.target))) {
+              if (isAdmin && e.target.tagName === "SPAN" && e.target.innerHTML === "×") {
                 return;
               }
               if (cat !== currentCat) {
@@ -258,44 +337,88 @@
             menu.appendChild(option);
           });
           
-          // 自訂分類選項
-          const divider = document.createElement("div");
-          divider.style.height = "1px";
-          divider.style.background = "var(--border)";
-          divider.style.margin = "4px 0";
-          menu.appendChild(divider);
+          // 自訂分類選項（僅管理員可以使用）
+          if (isAdmin) {
+            const divider = document.createElement("div");
+            divider.style.height = "1px";
+            divider.style.background = "var(--border)";
+            divider.style.margin = "4px 0";
+            menu.appendChild(divider);
+            
+            const customOption = document.createElement("div");
+            customOption.style.padding = "8px 16px";
+            customOption.style.cursor = "pointer";
+            customOption.style.color = "var(--muted)";
+            customOption.textContent = "+ 自訂分類...";
+            customOption.addEventListener("mouseenter", () => {
+              customOption.style.background = "rgba(37, 99, 235, 0.05)";
+            });
+            customOption.addEventListener("mouseleave", () => {
+              customOption.style.background = "transparent";
+            });
+            customOption.addEventListener("click", () => {
+              document.body.removeChild(menu);
+              const newCat = prompt("請輸入新的分類名稱：", currentCat);
+              if (newCat && newCat.trim() && newCat !== currentCat) {
+                const trimmedCat = newCat.trim();
+                // 加入自訂分類
+                if (!Object.keys(keywords).includes(trimmedCat)) {
+                  customCategories.add(trimmedCat);
+                  saveCustomCategories();
+                  updateCategorySelect();
+                  renderFilterChips();
+                }
+                issue.category = trimmedCat;
+                renderList();
+                renderChart();
+                saveToLocalStorage();
+                scheduleSync();
+              }
+            });
+            menu.appendChild(customOption);
+          }
           
-          const customOption = document.createElement("div");
-          customOption.style.padding = "8px 16px";
-          customOption.style.cursor = "pointer";
-          customOption.style.color = "var(--muted)";
-          customOption.textContent = "+ 自訂分類...";
-          customOption.addEventListener("mouseenter", () => {
-            customOption.style.background = "rgba(37, 99, 235, 0.05)";
-          });
-          customOption.addEventListener("mouseleave", () => {
-            customOption.style.background = "transparent";
-          });
-          customOption.addEventListener("click", () => {
-            document.body.removeChild(menu);
-            const newCat = prompt("請輸入新的分類名稱：", currentCat);
-            if (newCat && newCat.trim() && newCat !== currentCat) {
-              const trimmedCat = newCat.trim();
-              // 加入自訂分類
-              if (!Object.keys(keywords).includes(trimmedCat)) {
-                customCategories.add(trimmedCat);
-                saveCustomCategories();
+          // 僅管理員可以新增預設分類
+          if (isAdmin) {
+            const adminDivider = document.createElement("div");
+            adminDivider.style.height = "1px";
+            adminDivider.style.background = "var(--border)";
+            adminDivider.style.margin = "4px 0";
+            menu.appendChild(adminDivider);
+            
+            const addCategoryOption = document.createElement("div");
+            addCategoryOption.style.padding = "8px 16px";
+            addCategoryOption.style.cursor = "pointer";
+            addCategoryOption.style.color = "var(--accent)";
+            addCategoryOption.style.fontWeight = "600";
+            addCategoryOption.textContent = "+ 新增預設分類...";
+            addCategoryOption.addEventListener("mouseenter", () => {
+              addCategoryOption.style.background = "rgba(37, 99, 235, 0.05)";
+            });
+            addCategoryOption.addEventListener("mouseleave", () => {
+              addCategoryOption.style.background = "transparent";
+            });
+            addCategoryOption.addEventListener("click", () => {
+              document.body.removeChild(menu);
+              const newCat = prompt("請輸入新的預設分類名稱：");
+              if (newCat && newCat.trim()) {
+                const trimmedCat = newCat.trim();
+                // 檢查是否已存在
+                if (Object.keys(keywords).includes(trimmedCat) || customCategories.has(trimmedCat)) {
+                  alert("此分類已存在！");
+                  return;
+                }
+                // 加入 keywords（預設分類）
+                keywords[trimmedCat] = [];
                 updateCategorySelect();
                 renderFilterChips();
+                renderList();
+                saveToLocalStorage();
+                scheduleSync();
               }
-              issue.category = trimmedCat;
-              renderList();
-              renderChart();
-              saveToLocalStorage();
-              scheduleSync();
-            }
-          });
-          menu.appendChild(customOption);
+            });
+            menu.appendChild(addCategoryOption);
+          }
           
           document.body.appendChild(menu);
           
@@ -392,30 +515,33 @@
         meta.appendChild(time);
         row.appendChild(meta);
 
-        const actions = document.createElement("div");
-        actions.className = "actions";
+        // 僅管理員可以刪除事件
+        if (isAdmin) {
+          const actions = document.createElement("div");
+          actions.className = "actions";
 
-        const removeBtn = document.createElement("button");
-        removeBtn.type = "button";
-        removeBtn.className = "icon-button";
-        removeBtn.title = "刪除此事件";
-        removeBtn.innerHTML = "🗑";
-        removeBtn.addEventListener("click", () => {
-          if (!confirm("確定要刪除此事件嗎？此操作無法復原。")) {
-            return;
-          }
-          const idx = issues.findIndex((i) => i.id === issue.id);
-          if (idx !== -1) {
-            issues.splice(idx, 1);
-            renderList();
-            renderChart();
-            saveToLocalStorage();
-            scheduleSync();
-          }
-        });
+          const removeBtn = document.createElement("button");
+          removeBtn.type = "button";
+          removeBtn.className = "icon-button";
+          removeBtn.title = "刪除此事件";
+          removeBtn.innerHTML = "🗑";
+          removeBtn.addEventListener("click", () => {
+            if (!confirm("確定要刪除此事件嗎？此操作無法復原。")) {
+              return;
+            }
+            const idx = issues.findIndex((i) => i.id === issue.id);
+            if (idx !== -1) {
+              issues.splice(idx, 1);
+              renderList();
+              renderChart();
+              saveToLocalStorage();
+              scheduleSync();
+            }
+          });
 
-        actions.appendChild(removeBtn);
-        row.appendChild(actions);
+          actions.appendChild(removeBtn);
+          row.appendChild(actions);
+        }
 
         listEl.appendChild(row);
       });
@@ -615,10 +741,16 @@
       return;
     }
 
-    const category =
-      custom ||
-      (selected === "auto" ? detectCategory(text) : selected) ||
-      "其他";
+    // 僅管理員可以使用自訂分類
+    let category;
+    if (custom && isAdmin) {
+      category = custom;
+    } else if (custom && !isAdmin) {
+      statusEl.textContent = "僅管理員可以新增自訂分類";
+      return;
+    } else {
+      category = (selected === "auto" ? detectCategory(text) : selected) || "其他";
+    }
 
     const files = Array.from(fileInput.files);
 
@@ -717,23 +849,23 @@
     const demo = [
       {
         text: "TMflow 專案下載到控制器後無法執行，顯示流程錯誤。",
-        category: "TMflow應用問題"
+        category: "邏輯編程與調試難度"
       },
       {
         text: "相機拍攝時偶爾無法辨識 QR code，視覺結果不穩定。",
-        category: "視覺功能問題"
+        category: "視覺功能"
       },
       {
         text: "客戶反映透過 Modbus TCP 連線會間斷中斷，需要重連。",
-        category: "通訊問題"
+        category: "通訊相關"
       },
       {
         text: "手臂 Z 軸偶爾發出異音，停止後電源指示燈閃爍。",
-        category: "硬體/機構"
+        category: "運動與力矩"
       },
       {
         text: "新客戶不知道怎麼做安全區設定與權限管理，希望有教育訓練。",
-        category: "設定/流程"
+        category: "安全與法規"
       }
     ];
 
@@ -840,6 +972,7 @@
         })
         .finally(() => {
           loadCustomCategories();
+          cleanupOldCategories(); // 確保清理舊分類
           updateCategorySelect();
           renderFilterChips();
           renderChart();
@@ -863,6 +996,7 @@
         }
       }
       loadCustomCategories();
+      cleanupOldCategories(); // 確保清理舊分類
       updateCategorySelect();
       renderFilterChips();
       renderChart();
@@ -872,7 +1006,11 @@
 
   function renderFilterChips() {
     const allCats = getAllCategories();
-    const cats = ["全部", ...allCats];
+    // 過濾掉舊分類（測試2 和 TMflow應用問題）
+    const filteredCats = allCats.filter((cat) => 
+      cat !== "測試2" && cat !== "TMflow應用問題"
+    );
+    const cats = ["全部", ...filteredCats];
     filterEl.innerHTML = "";
     cats.forEach((c) => {
       const chip = document.createElement("button");
@@ -880,8 +1018,8 @@
       chip.className = "chip" + (c === activeFilter ? " active" : "");
       chip.textContent = c;
       
-      // 所有分類都可以刪除（除了「全部」）
-      if (c !== "全部") {
+      // 僅管理員可以刪除分類
+      if (isAdmin && c !== "全部") {
         chip.style.position = "relative";
         chip.style.paddingRight = "24px";
         
@@ -918,6 +1056,18 @@
   }
 
   function deleteCategory(category) {
+    // 僅管理員可以刪除分類
+    if (!isAdmin) {
+      alert("僅管理員可以刪除分類");
+      return;
+    }
+    
+    // 不能刪除「其他」分類
+    if (category === "其他") {
+      alert("無法刪除「其他」分類");
+      return;
+    }
+    
     // 檢查是否有事件使用此分類
     const hasIssues = issues.some((i) => i.category === category);
     if (hasIssues) {
@@ -942,8 +1092,10 @@
       customCategories.delete(category);
       saveCustomCategories();
     }
-    // 如果是預設分類，從 keywords 中移除（但保留在系統中，只是不再顯示）
-    // 注意：預設分類刪除後，如果沒有事件使用，就不會再顯示
+    // 如果是預設分類，從 keywords 中移除
+    if (keywords.hasOwnProperty(category)) {
+      delete keywords[category];
+    }
     
     updateCategorySelect();
     renderFilterChips();
@@ -955,8 +1107,12 @@
 
   function updateCategorySelect() {
     const allCats = getAllCategories();
+    // 過濾掉舊分類（測試2 和 TMflow應用問題）
+    const filteredCats = allCats.filter((cat) => 
+      cat !== "測試2" && cat !== "TMflow應用問題"
+    );
     categorySelect.innerHTML = '<option value="auto">自動判別</option>';
-    allCats.forEach((cat) => {
+    filteredCats.forEach((cat) => {
       const option = document.createElement("option");
       option.value = cat;
       option.textContent = cat;
@@ -1173,8 +1329,104 @@
     XLSX.writeFile(wb, filename);
   }
 
+  // 管理員功能
+  function checkAdminStatus() {
+    try {
+      const stored = localStorage.getItem("customer-admin-logged-in");
+      isAdmin = stored === "true";
+    } catch (err) {
+      isAdmin = false;
+    }
+    updateAdminUI();
+  }
+
+  function updateAdminUI() {
+    if (isAdmin) {
+      adminLoginBtn.textContent = "管理員已登入";
+      adminLoginBtn.style.background = "rgba(16, 185, 129, 0.2)";
+      adminLoginBtn.style.color = "#10b981";
+      adminLoginBtn.style.borderColor = "#10b981";
+      adminLogoutSection.style.display = "block";
+      adminLoginForm.style.display = "none";
+      // 啟用自訂分類輸入框
+      customCategory.disabled = false;
+      customCategory.placeholder = "例：教育訓練、帳號權限…";
+      customCategory.style.opacity = "1";
+      customCategory.style.cursor = "text";
+    } else {
+      adminLoginBtn.textContent = "管理員登入";
+      adminLoginBtn.style.background = "";
+      adminLoginBtn.style.color = "";
+      adminLoginBtn.style.borderColor = "";
+      adminLogoutSection.style.display = "none";
+      adminLoginForm.style.display = "block";
+      // 禁用自訂分類輸入框
+      customCategory.disabled = true;
+      customCategory.placeholder = "僅管理員可以新增自訂分類";
+      customCategory.value = "";
+      customCategory.style.opacity = "0.5";
+      customCategory.style.cursor = "not-allowed";
+    }
+    // 重新渲染列表以顯示/隱藏刪除按鈕
+    renderList();
+    renderFilterChips();
+  }
+
+  function handleAdminLogin(event) {
+    event.preventDefault();
+    const password = adminPasswordInput.value.trim();
+    
+    if (password === ADMIN_PASSWORD) {
+      isAdmin = true;
+      localStorage.setItem("customer-admin-logged-in", "true");
+      adminLoginModal.classList.add("hidden");
+      adminPasswordInput.value = "";
+      adminLoginStatus.textContent = "";
+      updateAdminUI();
+    } else {
+      adminLoginStatus.textContent = "密碼錯誤";
+      adminLoginStatus.style.color = "#b91c1c";
+      adminPasswordInput.value = "";
+    }
+  }
+
+  function handleAdminLogout() {
+    if (confirm("確定要登出管理員嗎？")) {
+      isAdmin = false;
+      localStorage.removeItem("customer-admin-logged-in");
+      updateAdminUI();
+    }
+  }
+
+  // 管理員登入事件監聽
+  adminLoginBtn.addEventListener("click", () => {
+    adminLoginModal.classList.remove("hidden");
+    if (!isAdmin) {
+      adminPasswordInput.focus();
+    }
+  });
+
+  adminLoginClose.addEventListener("click", () => {
+    adminLoginModal.classList.add("hidden");
+    adminPasswordInput.value = "";
+    adminLoginStatus.textContent = "";
+  });
+
+  adminLoginModal.addEventListener("click", (e) => {
+    if (e.target === adminLoginModal || e.target.classList.contains("image-modal-backdrop")) {
+      adminLoginModal.classList.add("hidden");
+      adminPasswordInput.value = "";
+      adminLoginStatus.textContent = "";
+    }
+  });
+
+  adminLoginForm.addEventListener("submit", handleAdminLogin);
+  adminLogoutBtn.addEventListener("click", handleAdminLogout);
+
+  // 初始化管理員狀態
+  checkAdminStatus();
+
   form.addEventListener("submit", handleSubmit);
-  exportBtn.addEventListener("click", exportJson);
   exportExcelBtn.addEventListener("click", exportExcel);
 
   imageModalClose.addEventListener("click", () => {

@@ -23,8 +23,8 @@
         <p class="subtitle">輸入文字或圖片，系統協助歸檔並統計問題類型，掌握 TM 經銷商客訴痛點</p>
       </div>
       <div class="actions">
+        <button id="admin-login-btn" class="ghost">管理員登入</button>
         <button id="export-excel" class="ghost">匯出 Excel</button>
-        <button id="export-json" class="ghost">匯出 JSON</button>
       </div>
     </header>
 
@@ -55,11 +55,14 @@
             <span>預設分類</span>
             <select id="issue-category">
               <option value="auto">自動判別</option>
-              <option value="TMflow應用問題">TMflow應用問題</option>
-              <option value="視覺功能問題">視覺功能問題</option>
-              <option value="通訊問題">通訊問題</option>
-              <option value="硬體/機構">硬體/機構</option>
-              <option value="設定/流程">設定/流程</option>
+              <option value="視覺功能">視覺功能</option>
+              <option value="通訊相關">通訊相關</option>
+              <option value="運動與力矩">運動與力矩</option>
+              <option value="安全與法規">安全與法規</option>
+              <option value="邏輯編程與調試難度">邏輯編程與調試難度</option>
+              <option value="安裝、校正與維護">安裝、校正與維護</option>
+              <option value="周邊整合 (I/O & Gripper等)">周邊整合 (I/O & Gripper等)</option>
+              <option value="系統升級與備份">系統升級與備份</option>
               <option value="其他">其他</option>
             </select>
           </label>
@@ -98,6 +101,28 @@
       <button id="image-modal-next" class="image-modal-nav image-modal-next" aria-label="下一張">›</button>
       <img id="image-modal-img" alt="issue screenshot">
       <div id="image-modal-counter" class="image-modal-counter"></div>
+    </div>
+  </div>
+
+  <div id="admin-login-modal" class="image-modal hidden">
+    <div class="image-modal-backdrop"></div>
+    <div class="image-modal-content" style="max-width: 400px; padding: 24px;">
+      <button id="admin-login-close" class="image-modal-close" aria-label="關閉">×</button>
+      <h2 style="margin: 0 0 20px 0; color: var(--text);">管理員登入</h2>
+      <form id="admin-login-form">
+        <label class="field">
+          <span>管理員密碼</span>
+          <input id="admin-password" type="password" placeholder="請輸入管理員密碼" autocomplete="off">
+        </label>
+        <div class="form-actions" style="margin-top: 16px;">
+          <span id="admin-login-status" class="status"></span>
+          <button type="submit">登入</button>
+        </div>
+      </form>
+      <div id="admin-logout-section" style="margin-top: 16px; display: none;">
+        <p style="color: var(--muted); margin: 0 0 12px 0;">已登入為管理員</p>
+        <button id="admin-logout-btn" class="ghost" style="width: 100%;">登出</button>
+      </div>
     </div>
   </div>
 

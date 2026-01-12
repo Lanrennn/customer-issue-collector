@@ -68,7 +68,7 @@ git branch
 
 # 如果顯示的是 master，則使用：
 git push origin master
-```
+``
 
 **方法 2：如果還沒有任何提交**
 ```bash
